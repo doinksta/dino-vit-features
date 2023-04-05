@@ -9,10 +9,11 @@ import numpy as np
 from PIL import Image
 from sklearn.decomposition import PCA
 from typing import List, Tuple
+import cv2
 
 
-def pca(image_paths, load_size: int = 224, layer: int = 11, facet: str = 'key', bin: bool = False, stride: int = 4,
-        model_type: str = 'dino_vits8', n_components: int = 4,
+def pca(image_paths, load_size: int = 448, layer: int = 11, facet: str = 'key', bin: bool = False, stride: int = 4,
+        model_type: str = 'dino_vits8', n_components: int = 16,
         all_together: bool = True) -> List[Tuple[Image.Image, numpy.ndarray]]:
     """
     finding pca of a set of images.
@@ -36,13 +37,17 @@ def pca(image_paths, load_size: int = 224, layer: int = 11, facet: str = 'key', 
 
     # extract descriptors and saliency maps for each image
     for image_path in image_paths:
+        
         image_batch, image_pil = extractor.preprocess(image_path, load_size)
+        # breakpoint()
         image_pil_list.append(image_pil)
         descs = extractor.extract_descriptors(image_batch.to(device), layer, facet, bin, include_cls=False).cpu().numpy()
         curr_num_patches, curr_load_size = extractor.num_patches, extractor.load_size
         num_patches_list.append(curr_num_patches)
         load_size_list.append(curr_load_size)
         descriptors_list.append(descs)
+        # breakpoint()
+        
     if all_together:
         descriptors = np.concatenate(descriptors_list, axis=2)[0, 0]
         pca = PCA(n_components=n_components).fit(descriptors)
@@ -50,14 +55,21 @@ def pca(image_paths, load_size: int = 224, layer: int = 11, facet: str = 'key', 
         split_idxs = np.array([num_patches[0] * num_patches[1] for num_patches in num_patches_list])
         split_idxs = np.cumsum(split_idxs)
         pca_per_image = np.split(pca_descriptors, split_idxs[:-1], axis=0)
+    
+    # breakpoint()
+    
     else:
         pca_per_image = []
         for descriptors in descriptors_list:
             pca = PCA(n_components=n_components).fit(descriptors[0, 0])
             pca_descriptors = pca.transform(descriptors[0, 0])
             pca_per_image.append(pca_descriptors)
-    results = [(pil_image, img_pca.reshape((num_patches[0], num_patches[1], n_components))) for
-               (pil_image, img_pca, num_patches) in zip(image_pil_list, pca_per_image, num_patches_list)]
+           
+    results = [(pil_image, img_pca.reshape((num_patches[0], num_patches[1], n_components))) for(pil_image, img_pca, num_patches) in zip(image_pil_list, pca_per_image, num_patches_list)]
+    # breakpoint() 
+    # features=[( img_pca.reshape((num_patches[0], num_patches[1], n_components))) for(pil_image, img_pca, num_patches) in zip(image_pil_list, pca_per_image, num_patches_list)]
+    # results=np.array(results)
+    # np.save('dino_feature.npy',features)
     return results
 
 
@@ -75,33 +87,64 @@ def plot_pca(pil_image: Image.Image, pca_image: numpy.ndarray, save_dir: str, la
     """
     save_dir = Path(save_dir)
     save_dir.mkdir(exist_ok=True, parents=True)
+    #save original image
     pil_image_path = save_dir / f'{save_prefix}_orig_img.png'
     pil_image.save(pil_image_path)
 
     n_components = pca_image.shape[2]
-    for comp_idx in range(n_components):
-        comp = pca_image[:, :, comp_idx]
-        comp_min = comp.min(axis=(0, 1))
-        comp_max = comp.max(axis=(0, 1))
-        comp_img = (comp - comp_min) / (comp_max - comp_min)
-        comp_file_path = save_dir / f'{save_prefix}_{comp_idx}.png'
-        pca_pil = Image.fromarray((comp_img * 255).astype(np.uint8))
-        if save_resized:
-            pca_pil = pca_pil.resize(pil_image.size, resample=PIL.Image.NEAREST)
-        pca_pil.save(comp_file_path)
+    
+    #save the feature as npy file
+    feature = cv2.resize(pca_image, pil_image.size, interpolation=cv2.INTER_NEAREST)
+    
+    # path='res/manythings/dino_features.npy'
+    # np.save(path,features)
+    
+    # breakpoint()
+    # save different components
+    # feature=[]
+    # for comp_idx in range(n_components):
+    #     comp = pca_image[:, :, comp_idx]
+        
+    #     #normalize the image
+    #     comp_min = comp.min(axis=(0, 1))
+    #     comp_max = comp.max(axis=(0, 1))
+    #     comp_img = (comp - comp_min) / (comp_max - comp_min)
+        
+    #     comp_file_path = save_dir / f'{save_prefix}_{comp_idx}.png'
+    #     pca_pil = Image.fromarray((comp_img ).astype(np.uint8))
+    #     if save_resized:
+    #         pca_pil = pca_pil.resize(pil_image.size, resample=PIL.Image.NEAREST)
+    #     # pca_pil.save(comp_file_path)
+    #     # pca_pil_n=cv2.resize(comp, pil_image.size, interpolation=cv2.INTER_NEAREST)
+    #     # feature.append(pca_pil_n)
+    # feature = np.transpose(np.array(feature), (1, 2, 0))
+    # breakpoint()
 
     if last_components_rgb:
         comp_idxs = f"{n_components-3}_{n_components-2}_{n_components-1}"
         comp = pca_image[:, :, -3:]
+        #normalize
         comp_min = comp.min(axis=(0, 1))
         comp_max = comp.max(axis=(0, 1))
         comp_img = (comp - comp_min) / (comp_max - comp_min)
-        comp_file_path = save_dir / f'{save_prefix}_{comp_idxs}_rgb.png'
+        
+        # comp_file_path = save_dir / f'{save_prefix}_{comp_idxs}_rgb.png'
+        comp_file_path = save_dir / f'{save_prefix}.png'
         pca_pil = Image.fromarray((comp_img * 255).astype(np.uint8))
         if save_resized:
             pca_pil = pca_pil.resize(pil_image.size, resample=PIL.Image.NEAREST)
         pca_pil.save(comp_file_path)
+        
+        # feature = cv2.resize(, pil_image.size, interpolation=cv2.INTER_NEAREST)
+    
 
+    # remove the prefix and suffix from the string
+    number_string = save_prefix.replace('frame_', '').lstrip('0')
+    # convert the remaining string to an integer
+    number = int(number_string)
+    frame_index=number
+    # breakpoint()
+    return feature,frame_index
 
 """ taken from https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse"""
 def str2bool(v):
@@ -138,10 +181,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with torch.no_grad():
-
+ 
         # prepare directories
         root_dir = Path(args.root_dir)
         images_paths = [x for x in root_dir.iterdir() if x.suffix.lower() in ['.jpg', '.png', '.jpeg']]
+        # print(images_paths)
+        # breakpoint()
         save_dir = Path(args.save_dir)
         save_dir.mkdir(exist_ok=True, parents=True)
 
@@ -149,7 +194,20 @@ if __name__ == "__main__":
                             args.n_components, args.all_together)
 
         print("saving images")
+        all_features={}
         for image_path, (pil_image, pca_image) in tqdm(zip(images_paths, pca_per_image)):
             save_prefix = image_path.stem
-            plot_pca(pil_image, pca_image, str(save_dir), args.last_components_rgb, args.save_resized, save_prefix)
-
+            feature,index=plot_pca(pil_image, pca_image, str(save_dir), args.last_components_rgb, args.save_resized, save_prefix)
+            # breakpoint()
+            all_features[index]=feature
+        # save dino feature as npy file
+        # breakpoint()
+        
+        temp=[]
+        for i in range( len(all_features.keys())):
+            temp.append(all_features[i+1])
+        temp=np.array(temp)
+        # breakpoint()
+        path='res/fruit2/dino_features_8.npy'
+        np.save(path,temp)
+    
