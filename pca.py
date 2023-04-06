@@ -85,11 +85,11 @@ def plot_pca(pil_image: Image.Image, pca_image: numpy.ndarray, save_dir: str, la
     :param save_prefix: optional. prefix to saving
     :return: a list of lists containing an image and its principal components.
     """
-    save_dir = Path(save_dir)
-    save_dir.mkdir(exist_ok=True, parents=True)
+    # save_dir = Path(save_dir)
+    # save_dir.mkdir(exist_ok=True, parents=True)
     #save original image
-    pil_image_path = save_dir / f'{save_prefix}_orig_img.png'
-    pil_image.save(pil_image_path)
+    # pil_image_path = save_dir / f'{save_prefix}_orig_img.png'
+    # pil_image.save(pil_image_path)
 
     n_components = pca_image.shape[2]
     
@@ -120,22 +120,22 @@ def plot_pca(pil_image: Image.Image, pca_image: numpy.ndarray, save_dir: str, la
     # feature = np.transpose(np.array(feature), (1, 2, 0))
     # breakpoint()
 
-    if last_components_rgb:
-        comp_idxs = f"{n_components-3}_{n_components-2}_{n_components-1}"
-        comp = pca_image[:, :, -3:]
-        #normalize
-        comp_min = comp.min(axis=(0, 1))
-        comp_max = comp.max(axis=(0, 1))
-        comp_img = (comp - comp_min) / (comp_max - comp_min)
+    # if last_components_rgb:
+    #     comp_idxs = f"{n_components-3}_{n_components-2}_{n_components-1}"
+    #     comp = pca_image[:, :, -3:]
+    #     #normalize
+    #     comp_min = comp.min(axis=(0, 1))
+    #     comp_max = comp.max(axis=(0, 1))
+    #     comp_img = (comp - comp_min) / (comp_max - comp_min)
         
-        # comp_file_path = save_dir / f'{save_prefix}_{comp_idxs}_rgb.png'
-        comp_file_path = save_dir / f'{save_prefix}.png'
-        pca_pil = Image.fromarray((comp_img * 255).astype(np.uint8))
-        if save_resized:
-            pca_pil = pca_pil.resize(pil_image.size, resample=PIL.Image.NEAREST)
-        pca_pil.save(comp_file_path)
+    #     # comp_file_path = save_dir / f'{save_prefix}_{comp_idxs}_rgb.png'
+    #     comp_file_path = save_dir / f'{save_prefix}.png'
+    #     pca_pil = Image.fromarray((comp_img * 255).astype(np.uint8))
+    #     if save_resized:
+    #         pca_pil = pca_pil.resize(pil_image.size, resample=PIL.Image.NEAREST)
+    #     pca_pil.save(comp_file_path)
         
-        # feature = cv2.resize(, pil_image.size, interpolation=cv2.INTER_NEAREST)
+    #     # feature = cv2.resize(, pil_image.size, interpolation=cv2.INTER_NEAREST)
     
 
     # remove the prefix and suffix from the string
@@ -183,12 +183,15 @@ if __name__ == "__main__":
     with torch.no_grad():
  
         # prepare directories
-        root_dir = Path(args.root_dir)
+        root_dir = Path(args.root_dir + '/images_2')
         images_paths = [x for x in root_dir.iterdir() if x.suffix.lower() in ['.jpg', '.png', '.jpeg']]
         # print(images_paths)
         # breakpoint()
-        save_dir = Path(args.save_dir)
-        save_dir.mkdir(exist_ok=True, parents=True)
+        # save_dir = Path(args.save_dir)
+        # save_dir.mkdir(exist_ok=True, parents=True)
+
+        path = Path(args.root_dir + '/dino_features')
+        path.mkdir(exist_ok=True, parents=True)
 
         pca_per_image = pca(images_paths, args.load_size, args.layer, args.facet, args.bin, args.stride, args.model_type,
                             args.n_components, args.all_together)
@@ -197,8 +200,7 @@ if __name__ == "__main__":
         all_features={}
         for image_path, (pil_image, pca_image) in tqdm(zip(images_paths, pca_per_image)):
             save_prefix = image_path.stem
-            feature,index=plot_pca(pil_image, pca_image, str(save_dir), args.last_components_rgb, args.save_resized, save_prefix)
-            # breakpoint()
+            feature,index=plot_pca(pil_image, pca_image, str(path), args.last_components_rgb, args.save_resized, save_prefix)
             all_features[index]=feature
         # save dino feature as npy file
         # breakpoint()
@@ -208,6 +210,6 @@ if __name__ == "__main__":
             temp.append(all_features[i+1])
         temp=np.array(temp)
         # breakpoint()
-        path='res/fruit2/dino_features_8.npy'
-        np.save(path,temp)
+        
+        np.save(str(path) + '/dino_features_8.npy', temp)
     
